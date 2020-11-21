@@ -37,8 +37,8 @@ class CircleSingleLinkedList {
 				first.setNext(first); // 构成环
 				curBoy = first; // 让curBoy指向第一个小孩
 			} else {
-				curBoy.setNext(boy);//
-				boy.setNext(first);//
+				curBoy.setNext(boy);
+				boy.setNext(first); //始终让curBoy指向最后一个boy
 				curBoy = boy;
 			}
 		}

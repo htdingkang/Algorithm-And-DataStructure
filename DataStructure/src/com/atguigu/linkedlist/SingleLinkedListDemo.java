@@ -167,10 +167,11 @@ class SingleLinkedList {
         return head;
     }
 
-    //添加节点到单向链表
-    //思路，当不考虑编号顺序时
-    //1. 找到当前链表的最后节点
-    //2. 将最后这个节点的next 指向 新的节点
+
+    /**
+     * 尾插法
+     * @param heroNode
+     */
     public void add(HeroNode heroNode) {
 
         //因为head节点不能动，因此我们需要一个辅助遍历 temp
@@ -187,6 +188,15 @@ class SingleLinkedList {
         //当退出while循环时，temp就指向了链表的最后
         //将最后这个节点的next 指向 新的节点
         temp.next = heroNode;
+    }
+
+    /**
+     * 头插法
+     * @param heroNode
+     */
+    public void addHead(HeroNode heroNode) {
+        heroNode.next = head.next;
+        head.next  = heroNode;
     }
 
     //第二种方式在添加英雄时，根据排名将英雄插入到指定位置
