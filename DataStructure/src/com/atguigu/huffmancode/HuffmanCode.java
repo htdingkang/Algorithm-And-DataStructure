@@ -29,7 +29,7 @@ public class HuffmanCode {
 //        byte[] huffmanCodesBytes = huffmanZip(contentBytes);
 //        System.out.println("压缩后的结果是:" + Arrays.toString(huffmanCodesBytes) + " 长度= " + huffmanCodesBytes.length);
 //
-//        byte[] sourceBytes = decode(huffmanCodes, huffmanCodesBytes);
+//        byte[] sourceBytes = decode(huffmanCodes, huffmanCodesBytes, lastByteLength);
 //        System.out.println("解压后的字符串：" + new String(sourceBytes));
 
 
@@ -59,8 +59,10 @@ public class HuffmanCode {
             //读取赫夫曼编码表
             Map<Byte, String> huffmanCodes = (Map<Byte, String>) ois.readObject();
 
+            Integer lastByteLength = (Integer) ois.readObject();
+
             //解码
-            byte[] bytes = decode(huffmanCodes, huffmanBytes);
+            byte[] bytes = decode(huffmanCodes, huffmanBytes, lastByteLength);
             //将bytes 数组写入到目标文件
             os = new FileOutputStream(dstFile);
             //写数据到 dstFile 文件
@@ -113,6 +115,8 @@ public class HuffmanCode {
             //这里我们以对象流的方式写入 赫夫曼编码，是为了以后我们恢复源文件时使用
             //注意一定要把赫夫曼编码 写入压缩文件
             oos.writeObject(huffmanCodes);
+            //赫夫曼编码串切割的最后一次字符串长度
+            oos.writeObject(lastByteLength);
 
 
         } catch (Exception e) {
@@ -143,9 +147,10 @@ public class HuffmanCode {
     /**
      * @param huffmanCodes 赫夫曼编码表 map
      * @param huffmanBytes 赫夫曼编码得到的字节数组
+     * @param lastByteLength  赫夫曼bytes还原时  最后一位原本的二进制串长度   解决 正数 高位0 丢失的问题
      * @return 就是原来的字符串对应的数组
      */
-    private static byte[] decode(Map<Byte, String> huffmanCodes, byte[] huffmanBytes) {
+    private static byte[] decode(Map<Byte, String> huffmanCodes, byte[] huffmanBytes, Integer lastByteLength) {
 
         //1. 先得到 huffmanBytes 对应的 二进制的字符串 ， 形式 1010100010111...
         StringBuilder stringBuilder = new StringBuilder();
@@ -154,8 +159,11 @@ public class HuffmanCode {
             byte b = huffmanBytes[i];
             //判断是不是最后一个字节
             boolean flag = (i == huffmanBytes.length - 1);
-            stringBuilder.append(byteToBitString(b, !flag));
+            stringBuilder.append(byteToBitString(b, flag, lastByteLength));
         }
+
+        //System.out.println("解码后的赫夫曼编码串：" + stringBuilder.toString());
+
         //把字符串按照指定的赫夫曼编码进行解码
         //把赫夫曼编码表进行调换，因为反向查询 a->100 100->a
         Map<String, Byte> map = new HashMap<>();
@@ -177,17 +185,6 @@ public class HuffmanCode {
             while (flag) {
                 //1010100010111...
                 //递增的取出 key
-                //这里存在一个问题就是 当存在赫夫曼编码字符串的最后一位是以 0,00,..打头的会被忽略掉
-                //造成压缩的byte数组最后一个byte高位少0，还原的二进制串最后不足8位的部分也高位少0.
-                if (i + count > stringBuilder.length()) {
-                    String substring = stringBuilder.substring(i);
-                    while (map.get(substring) == null) {
-                        //高位补"0"进行匹配
-                        substring = "0" + substring;
-                    }
-                    b = map.get(substring);
-                    break;
-                }
                 String key = stringBuilder.substring(i, i + count);//i 不动，让count移动，指定匹配到一个字符
 
                 b = map.get(key);
@@ -218,18 +215,18 @@ public class HuffmanCode {
      * @param flag 标志是否需要补高位如果是true ，表示需要补高位，如果是false表示不补, 如果是最后一个字节，无需补高位
      * @return 是该b 对应的二进制的字符串，（注意是按补码返回）
      */
-    private static String byteToBitString(byte b, boolean flag) {
+    private static String byteToBitString(byte b, boolean flag, Integer lastByteLength) {
         //使用变量保存 b
         int temp = b; //将 b 转成 int
         //如果是正数我们还存在补高位
-        if (flag) {
-            temp |= 256; //按位与 256  1 0000 0000  | 0000 0001 => 1 0000 0001
-        }
+        temp |= 256; //按位与 256  1 0000 0000  | 0000 0001 => 1 0000 0001
+
         String str = Integer.toBinaryString(temp); //返回的是temp对应的二进制的补码
         if (flag) {
-            return str.substring(str.length() - 8);
+            //最后一个byte按实际位数截取
+            return str.substring(str.length() - lastByteLength);
         } else {
-            return str;
+            return str.substring(str.length() - 8);
         }
     }
 
@@ -290,8 +287,9 @@ public class HuffmanCode {
         int index = 0;//记录是第几个byte
         for (int i = 0; i < stringBuilder.length(); i += 8) { //因为是每8位对应一个byte,所以步长 +8
             String strByte;
-            if (i + 8 > stringBuilder.length()) {//不够8位   最后一个字节可能会少0  即  01 -> 1
+            if (i + 8 > stringBuilder.length()) {//不够8位   最后一个字节可能会少0  即  01 -> 1  所以需要记录最后一次切割的长度
                 strByte = stringBuilder.substring(i);
+                lastByteLength = strByte.length();
             } else {
                 strByte = stringBuilder.substring(i, i + 8);
             }
@@ -309,6 +307,9 @@ public class HuffmanCode {
     static Map<Byte, String> huffmanCodes = new HashMap<Byte, String>();
     //2. 在生成赫夫曼编码表示，需要去拼接路径, 定义一个StringBuilder 存储某个叶子结点的路径
     static StringBuilder stringBuilder = new StringBuilder();
+
+    //赫夫曼编码串转byte数组的最后一位切割长度。用于0打头的byte还原时处理高位缺失问题  默认是正好8位
+    static Integer lastByteLength = 8;
 
 
     //为了调用方便，我们重载 getCodes
